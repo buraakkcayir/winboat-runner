@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+
+# ==========================================
+# CONFIGURATION LOADER
+# ==========================================
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/winboat/winboat.conf"
+
+# Default configuration values
+CONTAINER_NAME="WinBoat"
+IDLE_TIMEOUT=90
+RDP_USER="your_username"
+RDP_PASS=""
+HOST_SHARE='\\host\Data'
+
+# Source custom user configuration if exists
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+fi
+
+ACTIVITY_FILE="${XDG_RUNTIME_DIR:-/run/user/${UID:-1000}}/winboat_activity"
+LOCK_FILE="${XDG_RUNTIME_DIR:-/run/user/${UID:-1000}}/winboat_autostop.lock"
+
+touch "$ACTIVITY_FILE"
+
+# ==========================================
+# 1. DYNAMIC CONTAINER & RDP SERVICE PROBE
+# ==========================================
+# Start docker container if it is not currently running
+if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    docker start "$CONTAINER_NAME" >/dev/null 2>&1
+fi
+
+# Fetch mapped RDP port from docker (wait up to 15 seconds)
+PORT=""
+for _ in {1..30}; do
+    PORT=$(docker port "$CONTAINER_NAME" 3389/tcp 2>/dev/null | head -n 1 | awk -F: '{print $NF}')
+    [ -n "$PORT" ] && break
+    sleep 0.5
+done
+
+if [ -z "$PORT" ]; then
+    echo "Error: Unable to resolve Docker RDP port." >&2
+    exit 1
+fi
+
+# Dynamic Probe: Wait until Windows RDP service actively accepts Connection Request PDU packets
+python3 -c '
+import socket, time, sys
+port = int(sys.argv[1])
+for _ in range(45):
+    try:
+        s = socket.socket()
+        s.settimeout(1)
+        s.connect(("127.0.0.1", port))
+        # Send RDP Connection Request PDU
+        s.send(b"\x03\x00\x00\x13\x0e\xe0\x00\x00\x00\x00\x00\x01\x00\x08\x00\x03\x00\x00\x00")
+        data = s.recv(1024)
+        if data:
+            s.close()
+            sys.exit(0)
+    except Exception:
+        pass
+    time.sleep(1)
+sys.exit(1)
+' "$PORT"
+
+if [ $? -ne 0 ]; then
+    echo "Error: Windows RDP service connection timed out." >&2
+    exit 1
+fi
+
+# ==========================================
+# 2. RDP CLIENT & APPLICATION PARAMETERS
+# ==========================================
+BASE_FLAGS=(
+    /u:"$RDP_USER"
+    /v:127.0.0.1
+    /port:"$PORT"
+    /cert:ignore
+    +clipboard
+    /sound:sys:pulse
+    /microphone:sys:pulse
+    /compression
+    /scale:100
+)
+
+[ -n "$RDP_PASS" ] && BASE_FLAGS+=(/p:"$RDP_PASS")
+
+APP_TYPE="$1"
+shift 1 2>/dev/null
+
+# Clean KDE Plasma file paths (strip file:// protocol and quotes)
+RAW_FILE=$(echo "$*" | sed -E 's|^file://||' | sed "s|^['\"]||;s|['\"]$||")
+
+case "$APP_TYPE" in
+    word|Word|WINWORD)
+        APP_PATH="C:\Program Files\Microsoft Office\Root\Office16\WINWORD.EXE"
+        WM_CLASS="winboat-Microsoft Word"
+        ;;
+    excel|Excel|EXCEL)
+        APP_PATH="C:\Program Files\Microsoft Office\Root\Office16\EXCEL.EXE"
+        WM_CLASS="winboat-Microsoft Excel"
+        ;;
+    powerpoint|PowerPoint|powerpnt|POWERPNT)
+        APP_PATH="C:\Program Files\Microsoft Office\Root\Office16\POWERPNT.EXE"
+        WM_CLASS="winboat-Microsoft PowerPoint"
+        ;;
+    desktop|"")
+        APP_PATH=""
+        WM_CLASS="winboat-Desktop"
+        ;;
+    *)
+        APP_PATH="$APP_TYPE"
+        WM_CLASS="winboat-App"
+        ;;
+esac
+
+# ==========================================
+# 3. EXECUTE RDP CONNECTION
+# ==========================================
+if [ -z "$APP_PATH" ]; then
+    xfreerdp3 "${BASE_FLAGS[@]}" +f /floatbar:sticky:on,default:visible,show:fullscreen
+elif [ -n "$RAW_FILE" ] && [ -f "$RAW_FILE" ]; then
+    WIN_FILE=$(echo "$RAW_FILE" | sed "s|^$HOME|$HOST_SHARE|g" | tr '/' '\\')
+    xfreerdp3 "${BASE_FLAGS[@]}" /wm-class:"$WM_CLASS" "/app:program:$APP_PATH,cmd:\"$WIN_FILE\""
+else
+    xfreerdp3 "${BASE_FLAGS[@]}" /wm-class:"$WM_CLASS" "/app:program:$APP_PATH"
+fi
+
+# ==========================================
+# 4. SAFE IDLE AUTO-STOP DAEMON
+# ==========================================
+touch "$ACTIVITY_FILE"
+
+(
+    exec 200>"$LOCK_FILE"
+    if ! flock -n 200; then
+        exit 0
+    fi
+
+    while true; do
+        if pgrep -f "xfreerdp" >/dev/null 2>&1; then
+            sleep 5
+            continue
+        fi
+
+        LAST_ACTIVE=$(stat -c %Y "$ACTIVITY_FILE" 2>/dev/null || echo 0)
+        NOW=$(date +%s)
+        DIFF=$((NOW - LAST_ACTIVE))
+
+        if [ "$DIFF" -ge "$IDLE_TIMEOUT" ]; then
+            if ! pgrep -f "xfreerdp" >/dev/null 2>&1; then
+                docker stop "$CONTAINER_NAME" >/dev/null 2>&1
+            fi
+            break
+        else
+            REMAINING=$((IDLE_TIMEOUT - DIFF))
+            [ "$REMAINING" -le 0 ] && REMAINING=5
+            sleep "$REMAINING"
+        fi
+    done
+) & disown
