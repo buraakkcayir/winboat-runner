@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Microsoft Word
+Comment=Microsoft Word (WinBoat)
+Exec=winboat-runner word
+Icon=application-vnd.openxmlformats-officedocument.wordprocessingml.document
+Terminal=false
+Type=Application
+Categories=Office;WordProcessor;
+StartupWMClass=winboat-Microsoft Word

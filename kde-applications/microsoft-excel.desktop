@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Microsoft Excel
+Comment=Microsoft Excel (WinBoat)
+Exec=winboat-runner excel
+Icon=application-vnd.ms-excel
+Terminal=false
+Type=Application
+Categories=Office;Spreadsheet;
+StartupWMClass=winboat-Microsoft Excel
