@@ -244,6 +244,65 @@ rm ~/.local/share/applications/{microsoft-word,microsoft-excel,microsoft-powerpo
 To customize an entry, copy it to `~/.local/share/applications/` and edit its
 `Name`, `Comment`, `Exec`, `Icon`, or `Categories` fields.
 
+### Custom icons
+
+The repository does not bundle Microsoft artwork. The default `Icon=` values
+refer to icons supplied by the current system theme, so the exact appearance
+can differ between distributions and KDE themes.
+
+To use your own icons, place files in a user-local icon directory and change
+the corresponding desktop entry:
+
+```bash
+mkdir -p ~/.local/share/icons
+cp /path/to/your/excel.svg ~/.local/share/icons/winboat-excel.svg
+cp /path/to/your/word.svg ~/.local/share/icons/winboat-word.svg
+cp /path/to/your/powerpoint.svg ~/.local/share/icons/winboat-powerpoint.svg
+```
+
+Then use either an absolute path:
+
+```ini
+Icon=/home/your-user/.local/share/icons/winboat-excel.svg
+```
+
+or a theme icon name:
+
+```ini
+Icon=winboat-excel
+```
+
+The theme-name form is portable between machines when the icon is installed in
+the same user icon directory. Do not commit personal absolute paths or
+third-party artwork unless you have permission to redistribute it.
+
+### Optional KDE window rules
+
+KDE Window Rules can improve taskbar grouping and desktop placement for
+seamless application windows, but window properties vary by FreeRDP version,
+KDE version, Windows language, and Office installation. Treat the following as
+starting points rather than universal values.
+
+1. Open **System Settings → Window Management → Window Rules**.
+2. Create a rule and use **Detect Window Properties** (or the equivalent
+   picker in your KDE version) while the target WinBoat window is focused.
+3. Match the observed window title or class. Do not assume that `RAIL` or an
+   Office title is identical on every system.
+4. Set only the properties you need, such as the desktop file name, taskbar
+   grouping, position, or virtual desktop.
+
+Typical application titles and desktop file names are:
+
+| Application | Typical title | Desktop file name |
+| --- | --- | --- |
+| Microsoft Excel | `Excel` | `microsoft-excel.desktop` |
+| Microsoft Word | `Word` | `microsoft-word.desktop` |
+| Microsoft PowerPoint | `PowerPoint` | `microsoft-powerpoint.desktop` |
+| Desktop | `Desktop` | `windows-desktop.desktop` |
+
+If a rule stops matching after a FreeRDP or Office update, inspect the live
+window properties again and update the rule instead of forcing a fixed class.
+
 ## Troubleshooting
 
 ### `required command not found`
