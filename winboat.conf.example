@@ -4,3 +4,5 @@ IDLE_TIMEOUT=90
 RDP_USER="your_username"
 RDP_PASS="your_password"
 HOST_SHARE='\\host\Data'
+# Leave empty to use xfreerdp3, then xfreerdp as a fallback.
+RDP_CLIENT=""

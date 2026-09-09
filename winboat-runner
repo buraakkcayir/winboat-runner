@@ -8,15 +8,37 @@ CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/winboat/winboat.conf"
 # Default configuration values
 CONTAINER_NAME="WinBoat"
 IDLE_TIMEOUT=90
-RDP_USER="your_username"
+RDP_USER=""
 RDP_PASS=""
-HOST_SHARE='\\host\Data'
+HOST_SHARE=""
+RDP_CLIENT=""
 
 # Source custom user configuration if exists
 if [ -f "$CONFIG_FILE" ]; then
     # shellcheck source=/dev/null
     source "$CONFIG_FILE"
 fi
+
+if [ -z "$RDP_CLIENT" ]; then
+    if command -v xfreerdp3 >/dev/null 2>&1; then
+        RDP_CLIENT="xfreerdp3"
+    elif command -v xfreerdp >/dev/null 2>&1; then
+        RDP_CLIENT="xfreerdp"
+    else
+        echo "Error: FreeRDP client not found. Install xfreerdp3 or xfreerdp." >&2
+        exit 1
+    fi
+elif ! command -v "$RDP_CLIENT" >/dev/null 2>&1; then
+    echo "Error: configured RDP_CLIENT '$RDP_CLIENT' was not found on PATH." >&2
+    exit 1
+fi
+
+for required_command in docker python3 flock pgrep; do
+    if ! command -v "$required_command" >/dev/null 2>&1; then
+        echo "Error: required command not found: $required_command" >&2
+        exit 1
+    fi
+done
 
 ACTIVITY_FILE="${XDG_RUNTIME_DIR:-/run/user/${UID:-1000}}/winboat_activity"
 LOCK_FILE="${XDG_RUNTIME_DIR:-/run/user/${UID:-1000}}/winboat_autostop.lock"
@@ -28,7 +50,11 @@ touch "$ACTIVITY_FILE"
 # ==========================================
 # Start docker container if it is not currently running
 if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    docker start "$CONTAINER_NAME" >/dev/null 2>&1
+    if ! docker start "$CONTAINER_NAME" >/dev/null 2>&1; then
+        echo "Error: unable to start Docker container '$CONTAINER_NAME'." >&2
+        echo "Check that the container exists and Docker is running." >&2
+        exit 1
+    fi
 fi
 
 # Fetch mapped RDP port from docker (wait up to 15 seconds)
@@ -91,7 +117,12 @@ APP_TYPE="$1"
 shift 1 2>/dev/null
 
 # Clean KDE Plasma file paths (strip file:// protocol and quotes)
-RAW_FILE=$(echo "$*" | sed -E 's|^file://||' | sed "s|^['\"]||;s|['\"]$||")
+RAW_FILE="${1:-}"
+RAW_FILE="${RAW_FILE#file://}"
+RAW_FILE="${RAW_FILE#\'}"
+RAW_FILE="${RAW_FILE%\'}"
+RAW_FILE="${RAW_FILE#\"}"
+RAW_FILE="${RAW_FILE%\"}"
 
 case "$APP_TYPE" in
     word|Word|WINWORD)
@@ -120,12 +151,21 @@ esac
 # 3. EXECUTE RDP CONNECTION
 # ==========================================
 if [ -z "$APP_PATH" ]; then
-    xfreerdp3 "${BASE_FLAGS[@]}" +f /floatbar:sticky:on,default:visible,show:fullscreen
+    "$RDP_CLIENT" "${BASE_FLAGS[@]}" +f /floatbar:sticky:on,default:visible,show:fullscreen
 elif [ -n "$RAW_FILE" ] && [ -f "$RAW_FILE" ]; then
-    WIN_FILE=$(echo "$RAW_FILE" | sed "s|^$HOME|$HOST_SHARE|g" | tr '/' '\\')
-    xfreerdp3 "${BASE_FLAGS[@]}" /wm-class:"$WM_CLASS" "/app:program:$APP_PATH,cmd:\"$WIN_FILE\""
+    if [ -z "$HOST_SHARE" ]; then
+        echo "Error: HOST_SHARE must be configured to open local files." >&2
+        exit 1
+    elif [[ "$RAW_FILE" == "$HOME"/* ]]; then
+        WIN_FILE="${HOST_SHARE}${RAW_FILE#"$HOME"}"
+        WIN_FILE="${WIN_FILE//\//\\}"
+        "$RDP_CLIENT" "${BASE_FLAGS[@]}" /wm-class:"$WM_CLASS" "/app:program:$APP_PATH,cmd:\"$WIN_FILE\""
+    else
+        echo "Error: file must be inside HOME to map it through HOST_SHARE: $RAW_FILE" >&2
+        exit 1
+    fi
 else
-    xfreerdp3 "${BASE_FLAGS[@]}" /wm-class:"$WM_CLASS" "/app:program:$APP_PATH"
+    "$RDP_CLIENT" "${BASE_FLAGS[@]}" /wm-class:"$WM_CLASS" "/app:program:$APP_PATH"
 fi
 
 # ==========================================
