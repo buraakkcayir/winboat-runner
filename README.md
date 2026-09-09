@@ -69,5 +69,20 @@ winboat-runner desktop
 
 ---
 
+## 🔒 Security
+
+- The runner passes a configured password to FreeRDP through standard input
+  instead of exposing it in the client process arguments.
+- FreeRDP uses trust-on-first-use certificate verification. A changed
+  certificate is rejected after the first connection; remove the locally
+  persisted certificate record only when the container was intentionally
+  reinstalled.
+- Keep `~/.config/winboat/winboat.conf` readable only by your user:
+  ```bash
+  chmod 600 ~/.config/winboat/winboat.conf
+  ```
+
+---
+
 ## 📜 License
 MIT License
