@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Microsoft PowerPoint
+Comment=Microsoft PowerPoint (WinBoat)
+Exec=winboat-runner powerpoint
+Icon=application-vnd.ms-powerpoint
+Terminal=false
+Type=Application
+Categories=Office;Presentation;
+StartupWMClass=winboat-Microsoft PowerPoint
