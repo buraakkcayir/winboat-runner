@@ -7,6 +7,12 @@ Docker container on demand, waits for its RDP service, launches an application
 or desktop session through FreeRDP, and stops the container after it has been
 idle.
 
+This is an independent, unofficial community tool. It is not affiliated with,
+endorsed by, sponsored by, or otherwise associated with WinBoat, Microsoft,
+Docker, FreeRDP, KDE, or the Windows container images mentioned in this
+documentation. All product and company names are trademarks of their
+respective owners.
+
 The project is intentionally a Bash/Python utility rather than a full
 virtualization platform. It assumes that the Windows container, its shared
 folder, and the Windows applications are already configured.
@@ -303,4 +309,10 @@ the Windows container or its Docker data.
 
 ## License
 
-MIT License
+This project is licensed under the [MIT License](LICENSE).
+
+The MIT license applies only to this repository's original code and
+documentation. Docker, FreeRDP, Python, KDE, Windows, Microsoft Office, and
+any container image or other third-party component remain subject to their own
+licenses and terms. You are responsible for complying with those terms and
+for having valid licenses for any Windows or Microsoft software you run.
