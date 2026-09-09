@@ -77,7 +77,7 @@ BASE_FLAGS=(
     /u:"$RDP_USER"
     /v:127.0.0.1
     /port:"$PORT"
-    /cert:ignore
+    /cert:tofu
     +clipboard
     /sound:sys:pulse
     /microphone:sys:pulse
@@ -85,7 +85,14 @@ BASE_FLAGS=(
     /scale:100
 )
 
-[ -n "$RDP_PASS" ] && BASE_FLAGS+=(/p:"$RDP_PASS")
+run_rdp() {
+    if [ -n "$RDP_PASS" ]; then
+        printf '%s\n%s\n\n' "$RDP_USER" "$RDP_PASS" | \
+            xfreerdp3 "${BASE_FLAGS[@]}" /from-stdin:force "$@"
+    else
+        xfreerdp3 "${BASE_FLAGS[@]}" "$@"
+    fi
+}
 
 APP_TYPE="$1"
 shift 1 2>/dev/null
@@ -120,12 +127,12 @@ esac
 # 3. EXECUTE RDP CONNECTION
 # ==========================================
 if [ -z "$APP_PATH" ]; then
-    xfreerdp3 "${BASE_FLAGS[@]}" +f /floatbar:sticky:on,default:visible,show:fullscreen
+    run_rdp +f /floatbar:sticky:on,default:visible,show:fullscreen
 elif [ -n "$RAW_FILE" ] && [ -f "$RAW_FILE" ]; then
     WIN_FILE=$(echo "$RAW_FILE" | sed "s|^$HOME|$HOST_SHARE|g" | tr '/' '\\')
-    xfreerdp3 "${BASE_FLAGS[@]}" /wm-class:"$WM_CLASS" "/app:program:$APP_PATH,cmd:\"$WIN_FILE\""
+    run_rdp /wm-class:"$WM_CLASS" "/app:program:$APP_PATH,cmd:\"$WIN_FILE\""
 else
-    xfreerdp3 "${BASE_FLAGS[@]}" /wm-class:"$WM_CLASS" "/app:program:$APP_PATH"
+    run_rdp /wm-class:"$WM_CLASS" "/app:program:$APP_PATH"
 fi
 
 # ==========================================
