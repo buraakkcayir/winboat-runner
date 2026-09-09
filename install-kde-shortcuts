@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+
+if ! command -v winboat-runner >/dev/null 2>&1; then
+    printf 'Error: winboat-runner must be installed on PATH before installing KDE shortcuts.\n' >&2
+    exit 1
+fi
+
+mkdir -p "$APPLICATIONS_DIR"
+
+for desktop_file in "$SCRIPT_DIR"/kde-applications/*.desktop; do
+    install -m 0644 "$desktop_file" "$APPLICATIONS_DIR/$(basename "$desktop_file")"
+done
+
+if command -v kbuildsycoca6 >/dev/null 2>&1; then
+    kbuildsycoca6 >/dev/null
+elif command -v kbuildsycoca5 >/dev/null 2>&1; then
+    kbuildsycoca5 >/dev/null
+fi
+
+printf 'KDE shortcuts installed in %s\n' "$APPLICATIONS_DIR"
